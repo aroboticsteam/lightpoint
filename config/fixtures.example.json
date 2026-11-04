@@ -12,8 +12,8 @@
   },
   "tick_hz": 40,
   "hall": {
-    "width": 16,
-    "depth": 21
+    "width": 17.65,
+    "depth": 34.19
   },
   "operators": [
     {

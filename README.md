@@ -72,5 +72,5 @@ Pan/tilt **invert** and the **pan range** (540 vs 630 on the Azors) are not solv
 - Invert flags are copied from the MagicQ fixture schedule (P Invert on all Azors, T Invert on R1); whether MagicQ's
   sense matches `pan_invert`/`tilt_invert` here is untested. Pan range is assumed to be the profile default.
 - "Full control" values (white, strobe open) come from the DMX charts but are untested on the fixtures.
-- Hall bounds in `hall` are placeholders (16 x 21 m).
+- `hall` is 17.65 m wide (X) by 34.19 m deep (Y), assigned by fit (heads reach 19.2 m deep); swap if wrong.
 - Calibration samples are held in memory until **Solve**; only the result is saved.

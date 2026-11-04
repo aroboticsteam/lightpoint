@@ -64,7 +64,7 @@ def load_config(path: str | Path) -> Config:
         out_port=out.get("port", 6454),
         out_universe=out["universe"],
         tick_hz=raw.get("tick_hz", 40),
-        hall=raw.get("hall", {"width": 16, "depth": 21}),
+        hall=raw.get("hall", {"width": 17.65, "depth": 34.19}),
         fixtures=fixtures,
         operators=raw.get("operators", []),
         disconnect_release_s=raw.get("disconnect_release_s", 15.0),
