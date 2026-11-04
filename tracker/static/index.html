@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Light Tracker</title>
+<style>
+  :root { --bg:#fafaf8; --card:#fff; --fg:#1c1c1a; --mut:#6b6b66; --line:#dcdcd6; --acc:#2563eb; --acc-bg:#e8efff;
+          --rogue:#c77700; --s2:#0d8a7a; --sp2:#6b4fc2; --bad:#c0392b; --ok:#1e8e3e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161614; --card:#1e1e1b; --fg:#ecece8; --mut:#9a9a93; --line:#33332f; --acc:#6ea0ff; --acc-bg:#1f2a44;
+            --rogue:#f0a43a; --s2:#3fc9b5; --sp2:#a994f2; --bad:#ff7a6b; --ok:#5fd07a; }
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,sans-serif; }
+  header { display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:12px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0; }
+  header a { color:var(--acc); text-decoration:none; } header a:hover { text-decoration:underline; }
+  .pill { padding:2px 8px; border-radius:99px; border:1px solid var(--line); color:var(--mut); font-size:12px; }
+  .pill.ok { color:var(--ok); border-color:var(--ok); } .pill.bad { color:var(--bad); border-color:var(--bad); }
+  main { display:grid; grid-template-columns:minmax(320px,1fr) minmax(380px,1fr); gap:16px; padding:16px; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .top { margin:16px 16px 0; }
+  canvas { width:100%; height:auto; display:block; cursor:crosshair; touch-action:none; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+  button, select, input { font:inherit; color:var(--fg); background:var(--card); border:1px solid var(--line); border-radius:6px; padding:4px 10px; }
+  button { cursor:pointer; } button:hover:not(:disabled) { border-color:var(--acc); }
+  input[type=number] { width:70px; }
+  table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+  th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--mut); font-weight:500; font-size:12px; }
+  .mut { color:var(--mut); } .warn { color:var(--bad); } small { color:var(--mut); }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { display:flex; align-items:center; gap:2px; padding:8px 12px; border-radius:8px; min-width:64px; justify-content:center; }
+  .chip.mine { background:var(--acc-bg); border-color:var(--acc); font-weight:600; }
+  .chip.taken { opacity:.4; cursor:not-allowed; }
+  .chip small { margin-left:6px; font-weight:400; }
+  .links { display:flex; gap:8px; flex-wrap:wrap; }
+  .links a { padding:4px 10px; border:1px solid var(--line); border-radius:6px; color:var(--fg); text-decoration:none; }
+  .links a:hover { border-color:var(--acc); }
+  #toast { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); background:var(--fg); color:var(--bg);
+           padding:8px 14px; border-radius:8px; max-width:90vw; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Light Tracker</h1>
+  <a id="back" href="/" hidden>&larr; Overview</a>
+  <span id="conn" class="pill bad">connecting…</span>
+  <span id="inpill" class="pill">board: no input</span>
+  <span id="tgt" class="pill" hidden></span>
+</header>
+
+<section class="card top" id="picker" hidden>
+  <div class="row">
+    <b>Your lights</b><span class="mut">tap a light to take it or let it go. Greyed-out lights are held by someone else.</span>
+    <button id="selfree">Select all free</button>
+    <button id="selnone">Deselect all</button>
+  </div>
+  <div class="chips" id="chips"></div>
+</section>
+
+<section class="card top" id="overview" hidden>
+  <div class="row"><b>People</b><button id="killall">Release every head</button></div>
+  <div class="links" id="links"></div>
+</section>
+
+<main>
+  <section class="card">
+    <div class="row" id="opbar" hidden>
+      <label>Target height (m) <input id="h" type="number" step="0.1" value="0" min="0"></label>
+      <button id="cleart">Clear target</button>
+      <small id="nolights" hidden>Select lights above to start following.</small>
+    </div>
+    <div class="row" id="adminbar" hidden><small>Click the plan to set a calibration point (a mark on the floor).</small></div>
+    <canvas id="plan"></canvas>
+    <small>Front wall is at the top; 0,0 is the front-left corner. Click or drag to aim.</small>
+  </section>
+  <section class="card">
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="calnote" hidden><small><b>Calibrate a head:</b> use the board to aim it at a known floor point, click that point
+    on the plan, press <i>Record</i>. Do 3&ndash;4 spread-out points, then <i>Solve</i>. Uncalibrated heads use a guessed
+    orientation (hung, pan 0 facing into the hall) and will point the wrong way.</small></p>
+  </section>
+</main>
+<div id="toast" hidden></div>
+
+<script>
+const OP = location.pathname.startsWith('/op/') ? decodeURIComponent(location.pathname.split('/')[2]) : null;
+const COLORS = { Rogue:'--rogue', 'Azor S2':'--s2', 'Azor SP2':'--sp2' };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const colorFor = p => css(COLORS[Object.keys(COLORS).find(k => p.startsWith(k))] || '--mut');
+const $ = id => document.getElementById(id);
+const cv = $('plan'), ctx = cv.getContext('2d');
+let S = null, M = null, calPoint = null, ws = null;
+
+// ---- websocket ---------------------------------------------------------------------------------
+function send(msg) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+  else toast('Not connected — retrying…');
+}
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws' + (OP ? '?op=' + encodeURIComponent(OP) : ''));
+  ws.onopen = () => setConn(true);
+  ws.onclose = () => { setConn(false); setTimeout(connect, 1000); };
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'state') {
+      S = m;
+      if (dragging && dragTarget && me()) me().target = dragTarget;  // keep the crosshair under the pointer
+      render(); draw();
+    } else if (m.type === 'error') toast(m.message);
+    else if (m.type === 'solved') toast(`${m.fid} solved, RMS error ${m.rms_deg}°`);
+  };
+}
+function setConn(ok) { const c = $('conn'); c.textContent = ok ? 'live' : 'offline — reconnecting…'; c.className = 'pill ' + (ok ? 'ok' : 'bad'); }
+let toastTimer = null;
+function toast(text) { const t = $('toast'); t.textContent = text; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3000); }
+
+// ---- helpers -----------------------------------------------------------------------------------
+const opById = id => S.operators.find(o => o.id === id);
+const me = () => OP && S && opById(OP);
+const mine = f => OP ? f.owner === OP : true;
+
+// ---- plan --------------------------------------------------------------------------------------
+function layout() {
+  const hall = S.hall, W = 640, pad = 34, sc = (W - 2*pad) / hall.width;
+  const H = Math.round(hall.depth * sc + 2*pad), dpr = window.devicePixelRatio || 1;
+  if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+  M = { W, H, pad, sc, dpr };
+}
+const px = (x, y) => [M.pad + x*M.sc, M.pad + y*M.sc];
+
+function cross(x, y, color, r, label) {
+  ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.moveTo(x-r-5,y); ctx.lineTo(x+r+5,y); ctx.moveTo(x,y-r-5); ctx.lineTo(x,y+r+5); ctx.stroke();
+  if (label) { ctx.fillStyle = color; ctx.fillText(label, x, y-r-8); }
+}
+
+function draw() {
+  if (!S) return;
+  layout();
+  ctx.setTransform(M.dpr,0,0,M.dpr,0,0); ctx.clearRect(0,0,M.W,M.H);
+  ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+  const hall = S.hall;
+  ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--mut'); ctx.lineWidth = 1;
+  for (let x = 0; x <= hall.width; x += 2) { const [a,b] = px(x,0), [,c] = px(x,hall.depth); ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(a,c); ctx.stroke(); ctx.fillText(x, a, M.H-14); }
+  for (let y = 0; y <= hall.depth; y += 2) { const [a,b] = px(0,y), [c] = px(hall.width,y); ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,b); ctx.stroke(); ctx.textAlign='right'; ctx.fillText(y, a-6, b+4); ctx.textAlign='center'; }
+  ctx.strokeStyle = css('--fg'); ctx.lineWidth = 3;
+  const [fx0,fy0] = px(0,0), [fx1] = px(hall.width,0);
+  ctx.beginPath(); ctx.moveTo(fx0,fy0); ctx.lineTo(fx1,fy0); ctx.stroke();
+  ctx.fillStyle = css('--fg'); ctx.fillText('FRONT WALL', (fx0+fx1)/2, fy0-10);
+
+  for (const f of S.fixtures) {
+    const [x,y] = px(f.pos[0], f.pos[1]);
+    const alpha = mine(f) ? 1 : 0.3, op = f.owner && opById(f.owner), t = op && op.target;
+    ctx.globalAlpha = alpha;
+    if (t && f.mode !== 'off') {
+      const [tx,ty] = px(t[0], t[1]);
+      ctx.strokeStyle = colorFor(f.profile); ctx.lineWidth = 1.5; ctx.setLineDash([4,4]); ctx.globalAlpha = alpha * (f.reachable ? .6 : .3);
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(tx,ty); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = alpha;
+    }
+    ctx.fillStyle = colorFor(f.profile); ctx.beginPath();
+    if (f.profile.startsWith('Rogue')) ctx.arc(x,y,7,0,7);
+    else if (f.profile.startsWith('Azor S2')) ctx.rect(x-6.5,y-6.5,13,13);
+    else { ctx.moveTo(x,y-9); ctx.lineTo(x+9,y); ctx.lineTo(x,y+9); ctx.lineTo(x-9,y); ctx.closePath(); }
+    ctx.fill();
+    if (f.mode !== 'off') { ctx.strokeStyle = css('--fg'); ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.fillStyle = css('--fg'); ctx.fillText(f.id, x, y-13);
+    ctx.globalAlpha = 1;
+  }
+  for (const o of S.operators) {
+    if (!o.target) continue;
+    const [x,y] = px(o.target[0], o.target[1]);
+    if (OP === o.id) cross(x, y, css('--acc'), 9);
+    else { ctx.globalAlpha = OP ? .45 : 1; cross(x, y, css('--mut'), 6, o.name); ctx.globalAlpha = 1; }
+  }
+  if (!OP && calPoint) { const [x,y] = px(calPoint[0], calPoint[1]); cross(x, y, css('--acc'), 9, 'cal'); }
+}
+
+// ---- lights picker (operator page): built once, then updated in place so clicks are never lost ---
+let chipsBuilt = false;
+function updateChips() {
+  const box = $('chips');
+  if (!chipsBuilt) {
+    for (const f of S.fixtures) {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.dataset.id = f.id;
+      b.innerHTML = '<span class="dot"></span><span class="nm"></span><small class="by"></small>';
+      b.querySelector('.dot').style.background = colorFor(f.profile);
+      b.title = f.profile;
+      box.appendChild(b);
+    }
+    chipsBuilt = true;
+  }
+  for (const f of S.fixtures) {
+    const b = box.querySelector(`[data-id="${f.id}"]`);
+    const state = f.owner === OP ? 'mine' : f.owner ? 'taken' : 'free';
+    b.className = 'chip ' + state;
+    b.disabled = state === 'taken';
+    b.querySelector('.nm').textContent = (state === 'mine' ? '✓ ' : '') + f.id;
+    b.querySelector('.by').textContent = state === 'taken' ? opById(f.owner).name : '';
+  }
+}
+
+// ---- table -------------------------------------------------------------------------------------
+let rowSig = '';
+function buildRows() {
+  const fixtures = S.fixtures.filter(mine);
+  const sig = JSON.stringify([OP, fixtures.map(f => f.id), OP ? 0 : S.operators.map(o => o.id)]);
+  if (sig === rowSig) return;
+  rowSig = sig;
+  $('thead').innerHTML = OP
+    ? '<tr><th>My light</th><th>Mode</th><th>Pan / Tilt</th><th>State</th></tr>'
+    : '<tr><th>Head</th><th>Held by</th><th>Pan / Tilt</th><th>State</th><th>Calibration</th></tr>';
+  const tb = $('rows'); tb.innerHTML = '';
+  const ownerOpts = '<option value="">— free —</option>' + S.operators.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+  for (const f of fixtures) {
+    const tr = document.createElement('tr'); tr.id = 'r_'+f.id;
+    const head = `<td><span class="dot"></span><b>${f.id}</b> <small>${f.profile}</small></td>`;
+    const tail = '<td class="pt"></td><td class="ph"></td>';
+    tr.innerHTML = OP
+      ? `${head}<td><select class="mode" data-id="${f.id}"><option value="off">Hold (board)</option><option value="pan_tilt">Follow</option><option value="full">Full control</option></select></td>${tail}`
+      : `${head}<td><select class="owner" data-id="${f.id}">${ownerOpts}</select></td>${tail}
+         <td><button data-act="sample" data-id="${f.id}">Record</button> <button data-act="solve" data-id="${f.id}">Solve</button> <button data-act="clear" data-id="${f.id}">&times;</button> <span class="n"></span></td>`;
+    tb.appendChild(tr);
+  }
+}
+
+function render() {
+  if (!S) return;
+  const pill = $('inpill'), age = S.input.age_s, live = age !== null && age < 2;
+  pill.textContent = age === null ? 'board: no input' : live ? 'board: live' : `board: stale ${age}s`;
+  pill.className = 'pill ' + (live ? 'ok' : 'bad');
+  if (OP) {
+    const o = me(); if (!o) return;
+    $('title').textContent = o.name; document.title = `${o.name} — Light Tracker`;
+    $('back').hidden = false; $('opbar').hidden = false; $('picker').hidden = false;
+    $('nolights').hidden = o.fixtures.length > 0;
+    const t = $('tgt'); t.hidden = false; t.textContent = o.target ? `target: ${o.target.map(v => v.toFixed(2)).join(', ')} m` : 'target: none';
+    updateChips();
+  } else {
+    $('adminbar').hidden = false; $('calnote').hidden = false; $('overview').hidden = false;
+    $('links').innerHTML = S.operators.map(o => `<a href="/op/${o.id}">${o.name} <small>(${o.fixtures.join(', ') || 'no lights yet'})</small></a>`).join('');
+  }
+  buildRows();
+  for (const f of S.fixtures.filter(mine)) {
+    const tr = $('r_'+f.id); if (!tr) continue;
+    tr.querySelector('.dot').style.background = colorFor(f.profile);
+    const sel = tr.querySelector('select');
+    if (document.activeElement !== sel) sel.value = OP ? f.mode : (f.owner || '');
+    tr.querySelector('.pt').textContent = f.phase === 'passthrough' ? '—' : `${f.pan}° / ${f.tilt}°`;
+    tr.querySelector('.ph').innerHTML = f.phase === 'passthrough' ? '<span class="mut">board</span>'
+      : f.phase === 'releasing' ? 'releasing' : (f.reachable ? (f.mode === 'full' ? 'full control' : 'following') : '<span class="warn">out of range</span>');
+    const n = tr.querySelector('.n');
+    if (n) n.innerHTML = f.calibrated ? `<span class="mut">calibrated</span> · ${f.samples}` : `<span class="warn">uncalibrated</span> · ${f.samples}`;
+  }
+}
+
+// ---- aiming: click or drag --------------------------------------------------------------------
+let dragging = false, dragTarget = null, pendingT = null, lastSent = 0, sendTimer = null;
+const height = () => parseFloat($('h').value) || 0;
+function planPoint(e, clamp) {
+  const r = cv.getBoundingClientRect(), k = M.W / r.width;
+  const x = ((e.clientX - r.left) * k - M.pad) / M.sc, y = ((e.clientY - r.top) * k - M.pad) / M.sc;
+  const inside = x >= 0 && y >= 0 && x <= S.hall.width && y <= S.hall.depth;
+  if (!inside && !clamp) return null;
+  return [Math.min(Math.max(x, 0), S.hall.width), Math.min(Math.max(y, 0), S.hall.depth)];
+}
+function flushTarget() {
+  sendTimer = null; lastSent = performance.now();
+  if (pendingT) { send({ type:'target', op:OP, x:pendingT[0], y:pendingT[1], z:pendingT[2] }); pendingT = null; }
+}
+function aimAt(x, y) {
+  if (!OP) { calPoint = [x, y, 0]; draw(); return; }  // calibration points are floor marks
+  dragTarget = pendingT = [x, y, height()];
+  me().target = dragTarget; draw();  // the crosshair follows the pointer without waiting for the server
+  const wait = 33 - (performance.now() - lastSent);  // at most ~30 updates a second while dragging
+  if (wait <= 0) flushTarget(); else if (!sendTimer) sendTimer = setTimeout(flushTarget, wait);
+}
+cv.addEventListener('pointerdown', e => {
+  if (!S || !M) return;
+  const p = planPoint(e, false); if (!p) return;
+  dragging = true; cv.setPointerCapture(e.pointerId); aimAt(p[0], p[1]);
+});
+cv.addEventListener('pointermove', e => { if (dragging) { const p = planPoint(e, true); if (p) aimAt(p[0], p[1]); } });
+const endDrag = () => { if (dragging) { clearTimeout(sendTimer); flushTarget(); } dragging = false; dragTarget = null; };
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+// ---- buttons -----------------------------------------------------------------------------------
+$('selfree').onclick = () => send({ type:'claim_all', op:OP, on:true });
+$('selnone').onclick = () => send({ type:'claim_all', op:OP, on:false });
+$('cleart').onclick = () => send({ type:'target', op:OP, clear:true });
+$('killall').onclick = () => send({ type:'mode_all', mode:'off' });
+$('chips').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b || b.disabled) return;
+  send({ type:'claim', op:OP, fid:b.dataset.id, on: !b.classList.contains('mine') });
+});
+$('rows').addEventListener('change', e => {
+  const el = e.target, id = el.dataset.id; if (!id) return;
+  if (el.classList.contains('mode')) send({ type:'mode', op:OP, ids:[id], mode:el.value });
+  else if (el.classList.contains('owner')) send({ type:'assign', fid:id, op:el.value || null });
+});
+$('rows').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const fid = b.dataset.id, act = b.dataset.act;
+  if (act === 'sample' && !calPoint) return toast('Click the known point on the plan first.');
+  send({ type:'cal', action:act, fid, ...(act === 'sample' ? { x:calPoint[0], y:calPoint[1], z:calPoint[2] } : {}) });
+});
+
+connect();
+</script>
+</body>
+</html>

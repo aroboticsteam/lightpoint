@@ -1,0 +1,172 @@
+{
+  "_note": "pos_magicq is (x across, y HEIGHT, z depth from front wall) exactly as in the MagicQ patch; origin is the hall's front-left corner. universes are Art-Net port-addresses (0-based): a desk 'universe 1' is usually 0 here. Output defaults to loopback so nothing reaches real fixtures until you set it.",
+  "input": {
+    "host": "0.0.0.0",
+    "port": 6454,
+    "universe": 10
+  },
+  "output": {
+    "host": "127.0.0.1",
+    "port": 6454,
+    "universe": 0
+  },
+  "tick_hz": 40,
+  "hall": {
+    "width": 16,
+    "depth": 21
+  },
+  "operators": [
+    {
+      "id": "p1",
+      "name": "Person 1",
+      "fixtures": []
+    },
+    {
+      "id": "p2",
+      "name": "Person 2",
+      "fixtures": []
+    },
+    {
+      "id": "p3",
+      "name": "Person 3",
+      "fixtures": []
+    },
+    {
+      "id": "p4",
+      "name": "Person 4",
+      "fixtures": []
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "R1",
+      "profile": "rogue_r2x_17",
+      "address": 312,
+      "pos_magicq": [
+        3.75,
+        5.83,
+        4.41
+      ],
+      "tilt_invert": true
+    },
+    {
+      "id": "R2",
+      "profile": "rogue_r2x_17",
+      "address": 329,
+      "pos_magicq": [
+        7.54,
+        5.83,
+        4.08
+      ]
+    },
+    {
+      "id": "R3",
+      "profile": "rogue_r2x_17",
+      "address": 346,
+      "pos_magicq": [
+        10.13,
+        5.83,
+        4.02
+      ]
+    },
+    {
+      "id": "R4",
+      "profile": "rogue_r2x_17",
+      "address": 363,
+      "pos_magicq": [
+        13.84,
+        5.83,
+        3.93
+      ]
+    },
+    {
+      "id": "P1",
+      "profile": "azor_sp2_43",
+      "address": 25,
+      "pos_magicq": [
+        5.9,
+        5.87,
+        19.1
+      ],
+      "pan_invert": true
+    },
+    {
+      "id": "P2",
+      "profile": "azor_sp2_43",
+      "address": 68,
+      "pos_magicq": [
+        8.05,
+        5.87,
+        19.17
+      ],
+      "pan_invert": true
+    },
+    {
+      "id": "P3",
+      "profile": "azor_sp2_43",
+      "address": 111,
+      "pos_magicq": [
+        10.02,
+        5.87,
+        19.0
+      ],
+      "pan_invert": true
+    },
+    {
+      "id": "P4",
+      "profile": "azor_sp2_43",
+      "address": 154,
+      "pos_magicq": [
+        12.12,
+        5.87,
+        19.13
+      ],
+      "pan_invert": true
+    },
+    {
+      "id": "S1",
+      "profile": "azor_s2_28",
+      "address": 200,
+      "pos_magicq": [
+        4.77,
+        5.83,
+        4.08
+      ],
+      "pan_invert": true
+    },
+    {
+      "id": "S2",
+      "profile": "azor_s2_28",
+      "address": 228,
+      "pos_magicq": [
+        6.6,
+        5.83,
+        4.22
+      ],
+      "pan_invert": true
+    },
+    {
+      "id": "S3",
+      "profile": "azor_s2_28",
+      "address": 256,
+      "pos_magicq": [
+        11.19,
+        5.83,
+        4.13
+      ],
+      "pan_invert": true
+    },
+    {
+      "id": "S4",
+      "profile": "azor_s2_28",
+      "address": 284,
+      "pos_magicq": [
+        12.92,
+        5.83,
+        3.9
+      ],
+      "pan_invert": true
+    }
+  ],
+  "disconnect_release_s": 15
+}
