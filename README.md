@@ -32,7 +32,8 @@ docker run --rm --network host -v "$PWD/config:/config:ro" lightpoint
   tracker answers it with an ArtPollReply advertising `input.universe`, which is what lets a console in
   *Unicast* transmit mode (e.g. Zero 88 FLX S) find it and send ArtDmx straight to this machine.
 - Environment: `TRACKER_CONFIG` (default `/config/fixtures.json`), `WEB_HOST` (`0.0.0.0`), `WEB_PORT` (`8080`).
-- CI (`.github/workflows/docker.yml`) runs the tests and publishes `ghcr.io/aroboticsteam/lightpoint` for amd64 and
+- CI (`.github/workflows/docker.yml`) runs the tests, builds amd64 and arm64 natively (matrix, same scheme as vex-tm-tools) and publishes
+  `ghcr.io/aroboticsteam/lightpoint` as one multi-arch manifest for amd64 and
   arm64 (and mirrors to `registry.kmnet.uk/lightpoint` when the `KMNET_REGISTRY_*` secrets are set).
 
 ## Using it
