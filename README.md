@@ -21,6 +21,20 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/python -m tracker --web-host 0.0.0.0     # http://<this-machine>:8080
 ```
 
+## Docker
+
+```bash
+docker build -t lightpoint .
+docker run --rm --network host -v "$PWD/config:/config:ro" lightpoint
+```
+
+- `--network host` is needed so the console's broadcast Art-Net discovery (ArtPoll) reaches the tracker. The
+  tracker answers it with an ArtPollReply advertising `input.universe`, which is what lets a console in
+  *Unicast* transmit mode (e.g. Zero 88 FLX S) find it and send ArtDmx straight to this machine.
+- Environment: `TRACKER_CONFIG` (default `/config/fixtures.json`), `WEB_HOST` (`0.0.0.0`), `WEB_PORT` (`8080`).
+- CI (`.github/workflows/docker.yml`) runs the tests and publishes `ghcr.io/aroboticsteam/lightpoint` for amd64 and
+  arm64 (and mirrors to `registry.kmnet.uk/lightpoint` when the `KMNET_REGISTRY_*` secrets are set).
+
 ## Using it
 
 - **`/op/p1` ... `/op/p4`** (Person 1-4): each person's own page. At the top is a row with every light. Tap a light
@@ -67,8 +81,9 @@ Pan/tilt **invert** and the **pan range** (540 vs 630 on the Azors) are not solv
 ## Not verified yet / known gaps
 
 - Nothing has been run against real fixtures or the FLX S48. The Art-Net path is tested over loopback only.
-- Whether the S48 can output to a chosen universe/unicast IP, and whether the nodes need an ArtPoll reply from this
-  proxy, are untested (no ArtPollReply is implemented).
+- The proxy now answers ArtPoll with an ArtPollReply (one DMX output port on `input.universe`), so a console in
+  Unicast mode can discover it. This is built from the Art-Net spec and tested over loopback only: whether the FLX S48
+  accepts it, and the universe numbering offset (desk universe 1 may be Art-Net universe 0 or 1), are untested.
 - Invert flags are copied from the MagicQ fixture schedule (P Invert on all Azors, T Invert on R1); whether MagicQ's
   sense matches `pan_invert`/`tilt_invert` here is untested. Pan range is assumed to be the profile default.
 - "Full control" values (white, strobe open) come from the DMX charts but are untested on the fixtures.
