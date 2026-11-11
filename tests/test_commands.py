@@ -112,3 +112,11 @@ def test_dynamic_back_min_command(engine):
     for bad in ({"back_min": -1}, {"back_min": 99}, {"back_min": "1"}, {"back_min": True}):
         with pytest.raises(CommandError):
             apply(engine, {"type": "dynamic", "op": "p1", **bad})
+
+
+def test_dynamic_front_min_command(engine):
+    apply(engine, {"type": "dynamic", "op": "p1", "front_min": 2})
+    assert engine.operators["p1"]["front_min"] == 2
+    for bad in ({"front_min": -1}, {"front_min": 99}, {"front_min": "1"}, {"front_min": False}):
+        with pytest.raises(CommandError):
+            apply(engine, {"type": "dynamic", "op": "p1", **bad})

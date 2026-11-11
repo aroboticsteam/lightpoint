@@ -78,6 +78,7 @@
       <label class="dynopt">closest <select id="dyncount"></select></label>
       <label class="dynopt" title="Next-closest lights that pre-aim so they are ready when the pointer gets near">ready <select id="dynprep"></select></label>
       <label class="dynopt" title="Keep at least this many of the spots for the back bar, even when other lights are closer">min from back bar <select id="dynback"></select></label>
+      <label class="dynopt" title="Keep at least this many of the spots for the front bar, even when other lights are closer">min from front bar <select id="dynfront"></select></label>
       <small id="nolights" hidden>Select lights above to start following.</small>
     </div>
     <div class="row" id="adminbar" hidden><small>Click the plan to set a calibration point (a mark on the floor).</small></div>
@@ -201,6 +202,8 @@ function buildDynamicControls() {
   $('dynprep').innerHTML = [0,1,2,3,4].map(n => `<option value="${n}">${n}</option>`).join('');
   $('dynback').innerHTML = [0,1,2,3,4].map(n => `<option value="${n}">${n}</option>`).join('');
   $('dynback').onchange = () => send({ type:'dynamic', op:OP, back_min:parseInt($('dynback').value, 10) });
+  $('dynfront').innerHTML = [0,1,2,3,4].map(n => `<option value="${n}">${n}</option>`).join('');
+  $('dynfront').onchange = () => send({ type:'dynamic', op:OP, front_min:parseInt($('dynfront').value, 10) });
   $('dyn').onchange = () => send({ type:'dynamic', op:OP, on:$('dyn').checked });
   $('dyncount').onchange = () => send({ type:'dynamic', op:OP, count:parseInt($('dyncount').value, 10) });
   $('dynprep').onchange = () => send({ type:'dynamic', op:OP, prepare:parseInt($('dynprep').value, 10) });
@@ -271,6 +274,7 @@ function render() {
     if (document.activeElement !== $('dyncount')) $('dyncount').value = o.count;
     if (document.activeElement !== $('dynprep')) $('dynprep').value = o.prepare;
     if (document.activeElement !== $('dynback')) $('dynback').value = o.back_min;
+    if (document.activeElement !== $('dynfront')) $('dynfront').value = o.front_min;
     const t = $('tgt'); t.hidden = false; t.textContent = o.target ? `target: ${o.target.map(v => v.toFixed(2)).join(', ')} m` : 'target: none';
     updateChips();
   } else {

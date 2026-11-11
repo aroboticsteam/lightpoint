@@ -55,8 +55,10 @@ docker run --rm --network host -v "$PWD/config:/config:ro" lightpoint
   to *Hold (board)* are not part of the pool. On the plan, parked lights are dimmed with a down arrow and ready lights
   have a dashed ring. *Min from back bar* (default 0; 0-4) keeps at least that many of the spots for lights tagged
   `"group": "back"` in the config, even when other lights are closer: the closest back lights take the places of the furthest
-  front ones (never more than the spots, or than the back lights you hold). Command: `{"type": "dynamic", "op": "p1",
-  "on": true, "count": 4, "prepare": 1, "back_min": 1}` (any field optional).
+  front ones (never more than the spots, or than the back lights you hold). *Min from front bar* does the same for lights tagged
+  `"group": "front"`; when both are set, back is filled first and front gets the spots that are left, and neither is
+  taken from the other's minimum. Command: `{"type": "dynamic", "op": "p1", "on": true, "count": 4, "prepare": 1,
+  "back_min": 1, "front_min": 1}` (any field optional).
 - **`/`** overview: who holds what (an operator can reassign or free any light), "Release every head", and
   calibration.
 - Everything is live: pages talk over `/ws`, send commands, and receive the full state whenever anything changes
@@ -77,10 +79,10 @@ That file is git-ignored (it holds your site's positions and calibration). Start
   (or host) or the proxy would hear itself.
 - `disconnect_release_s`: grace period before a closed operator page releases its lights.
 - `operators`: `{id, name, fixtures}`. Add or rename people here; `fixtures` is an optional starting selection
-  (empty by default). Optional `dynamic` (start in dynamic mode), `dynamic_count` (4), `dynamic_prepare` (1) and `dynamic_back_min` (0).
+  (empty by default). Optional `dynamic` (start in dynamic mode), `dynamic_count` (4), `dynamic_prepare` (1), `dynamic_back_min` (0) and `dynamic_front_min` (0).
 - `dynamic_hysteresis_m` (default 0.75): see *Dynamic mode*.
 - `fixtures`: `pos_magicq` is `[x, y = HEIGHT, z = depth]` as in the MagicQ patch, origin at the front-left corner.
-  Optional per head: `group` (`"back"` marks the back bar for dynamic mode's *min from back bar*), `reach` (default 1; dynamic mode divides a light's distance to the pointer by it, so `1.35` makes it
+  Optional per head: `group` (`"back"` / `"front"` mark the back / front bar for dynamic mode's *min from back / front bar*), `reach` (default 1; dynamic mode divides a light's distance to the pointer by it, so `1.35` makes it
   count as 1.35x closer and get picked more often), `pan_range`, `tilt_range`, `pan_invert`, `tilt_invert`, `max_slew_deg_s` (default 0 = no software cap: the head follows the pointer instantly and only its own motors limit the speed; set e.g. 60 to cap tracking speed). Handing a head back to the board always eases at 90 deg/s.
   `orientation` (3x3) is written by calibration.
 - Profiles live in `tracker/fixtures.py`, from the manufacturer charts: Rogue R2X Wash 17ch, Azor S2 28CH Extended,
