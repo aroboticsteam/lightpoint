@@ -139,3 +139,12 @@ async def test_rest_command_mirrors_the_websocket(client):
     s = await (await client.get("/api/state")).json()
     assert owner(s, "S1") == "p3"
     assert (await client.post("/api/command", json={"type": "claim", "op": "p4", "fid": "S1"})).status == 400
+
+
+async def test_floorplan_image_is_served_and_the_page_uses_it(client):
+    r = await client.get("/floorplan.png")
+    assert r.status == 200
+    assert r.headers["Content-Type"] == "image/png"
+    assert (await r.read()).startswith(b"\x89PNG")
+    page = await (await client.get("/")).text()
+    assert "/floorplan.png" in page and "drawImage(plan" in page
