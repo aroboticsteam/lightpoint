@@ -73,3 +73,34 @@ def test_unknown_things(engine):
     for msg in ({"type": "nope"}, {"type": "claim", "op": "zz", "fid": "R1"}, {"type": "claim", "op": "p1", "fid": "ZZ"}, []):
         with pytest.raises(CommandError):
             apply(engine, msg)
+
+
+def test_dynamic_command(engine):
+    apply(engine, {"type": "dynamic", "op": "p1", "on": True, "count": 3, "prepare": 2})
+    o = engine.operators["p1"]
+    assert o["dynamic"] and o["count"] == 3 and o["prepare"] == 2
+    apply(engine, {"type": "dynamic", "op": "p1", "count": 2})
+    assert o["count"] == 2 and o["dynamic"]  # only what is sent changes
+    apply(engine, {"type": "dynamic", "op": "p1", "on": False})
+    assert not o["dynamic"]
+    for bad in ({"count": 0}, {"count": 99}, {"count": "4"}, {"count": True}, {"prepare": -1}, {"prepare": 1.5}):
+        with pytest.raises(CommandError):
+            apply(engine, {"type": "dynamic", "op": "p1", **bad})
+    with pytest.raises(CommandError, match="unknown operator"):
+        apply(engine, {"type": "dynamic", "op": "nobody", "on": True})
+
+
+def test_reach_is_read_from_the_config_and_validated(tmp_path):
+    import json
+
+    from tracker.config import load_config
+
+    cfg = json.loads(CONFIG.read_text())
+    cfg["fixtures"][0]["reach"] = 1.35
+    p = tmp_path / "f.json"
+    p.write_text(json.dumps(cfg))
+    assert load_config(p).fixtures[0].reach == 1.35 and load_config(p).fixtures[1].reach == 1.0
+    cfg["fixtures"][0]["reach"] = 0
+    p.write_text(json.dumps(cfg))
+    with pytest.raises(ValueError, match="reach"):
+        load_config(p)

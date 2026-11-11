@@ -210,3 +210,131 @@ def test_default_follows_target_instantly(engine):
     engine.set_target("p3", [2, 20, 0])
     engine.tick(0.025)  # one tick later the head is already at the new aim, not 1.5 deg closer
     assert abs(engine.state["S1"].pan - first) > 5
+
+
+# -- dynamic mode ---------------------------------------------------------------------------------
+def _dyn_setup(engine, fids=("R1", "R2", "R3", "R4", "S1", "S2"), count=3, prepare=1):
+    for fid in fids:
+        engine.claim("p1", fid)
+    engine.set_dynamic("p1", on=True, count=count, prepare=prepare)
+
+
+def _roles(engine, fids):
+    return {fid: engine.state[fid].role for fid in fids}
+
+
+def test_dynamic_follows_only_the_closest_and_parks_the_rest_down(engine):
+    _dyn_setup(engine)
+    engine.set_target("p1", [3.8, 4.4, 0])  # right under R1; S1, S2 then R2 are next nearest
+    run(engine, 0.5)
+    roles = _roles(engine, ("R1", "R2", "R3", "R4", "S1", "S2"))
+    assert [f for f, r in roles.items() if r == "active"] == ["R1", "S1", "S2"]
+    assert [f for f, r in roles.items() if r == "armed"] == ["R2"]
+    assert {f for f, r in roles.items() if r == "idle"} == {"R3", "R4"}
+    # an idle head looks straight down: its beam direction has no horizontal part
+    fx, st = engine.fixtures["R4"], engine.state["R4"]
+    from tracker.aim import local_dir
+    beam = fx.R @ local_dir(st.pan, st.tilt)
+    assert beam[2] == pytest.approx(-1, abs=1e-3)
+
+
+def test_dynamic_set_follows_the_pointer(engine):
+    _dyn_setup(engine, count=2, prepare=0)
+    engine.set_target("p1", [3.8, 4.4, 0])
+    run(engine, 0.2)
+    assert {f for f, r in _roles(engine, engine.fixtures).items() if r == "active"} == {"R1", "S1"}
+    engine.set_target("p1", [13.5, 4.0, 0])  # moved across the hall
+    run(engine, 0.2)
+    active = {f for f, r in _roles(engine, engine.fixtures).items() if r == "active"}
+    assert active <= {"R3", "R4", "S3", "S4"} and len(active) == 2
+    assert engine.state["R1"].role == "idle"
+
+
+def test_dynamic_lights_follow_on_and_prepared_or_parked_ones_are_off(engine):
+    _dyn_setup(engine, fids=("R1", "R2", "R3"), count=1, prepare=1)  # modes stay "pan_tilt" (Follow)
+    dimmer = 6  # Rogue dimmer channel
+    for fid in ("R1", "R2", "R3"):
+        fx = engine.fixtures[fid]
+        engine.board[fx.slot(dimmer)] = 200  # the board has them all lit
+    engine.set_target("p1", [3.8, 4.4, 0])
+    frame = run(engine, 0.3)
+    assert engine.state["R1"].role == "active" and engine.state["R2"].role == "armed" and engine.state["R3"].role == "idle"
+    fx1, fx2, fx3 = (engine.fixtures[f] for f in ("R1", "R2", "R3"))
+    assert frame[fx1.slot(dimmer)] == 255  # following: on
+    assert frame[fx2.slot(dimmer)] == 0  # pre-aiming: off
+    assert frame[fx3.slot(dimmer)] == 0  # parked pointing down: off
+    # the prepared head is still aimed at the pointer
+    sol = solve_angles(fx2.R, fx2.pos, np.array([3.8, 4.4, 0]), fx2.pan_range, fx2.tilt_range)
+    assert engine.state["R2"].pan == pytest.approx(sol[0], abs=0.5)
+    # and it comes on the moment it is promoted
+    engine.set_target("p1", [7.5, 4.0, 0])
+    frame = run(engine, 0.1)
+    assert engine.state["R2"].role == "active" and frame[fx2.slot(dimmer)] == 255
+    assert frame[fx1.slot(dimmer)] in (0, 255) and engine.state["R1"].role != "active" and frame[fx1.slot(dimmer)] == 0
+
+
+def test_dynamic_without_a_target_everything_is_dark_and_pointing_down(engine):
+    _dyn_setup(engine, fids=("S1", "P1"))
+    for fid, ch in (("S1", 5), ("P1", 5)):
+        engine.board[engine.fixtures[fid].slot(ch)] = 180
+    frame = run(engine, 0.2)
+    for fid in ("S1", "P1"):
+        fx = engine.fixtures[fid]
+        assert engine.state[fid].role == "idle"
+        assert frame[fx.slot(5)] == 0 and frame[fx.slot(6)] == 0  # 16-bit dimmer off
+
+
+def test_dynamic_hysteresis_stops_flicker_between_similar_distances(engine):
+    _dyn_setup(engine, fids=("R2", "R3"), count=1, prepare=0)
+    mid = (engine.fixtures["R2"].pos + engine.fixtures["R3"].pos) / 2
+    engine.set_target("p1", mid - [0.2, 0, 0])  # R2 slightly closer
+    run(engine, 0.1)
+    assert engine.state["R2"].role == "active"
+    engine.set_target("p1", mid + [0.2, 0, 0])  # R3 now slightly closer, but not by the margin
+    run(engine, 0.1)
+    assert engine.state["R2"].role == "active"
+    engine.set_target("p1", mid + [2.0, 0, 0])  # clearly R3's now
+    run(engine, 0.1)
+    assert engine.state["R3"].role == "active" and engine.state["R2"].role == "idle"
+
+
+def test_dynamic_without_a_target_points_everything_down(engine):
+    _dyn_setup(engine, fids=("R1", "R2"))
+    run(engine, 0.2)
+    assert set(_roles(engine, ("R1", "R2")).values()) == {"idle"}
+
+
+def test_dynamic_off_goes_back_to_all_following_and_held_heads_stay_out(engine):
+    _dyn_setup(engine, fids=("R1", "R2", "R3"), count=1, prepare=0)
+    engine.set_mode("R3", "off")  # holding to the board: not part of the pool
+    engine.set_target("p1", [3.8, 4.4, 0])
+    run(engine, 0.2)
+    assert engine.state["R3"].role == "" and engine.state["R2"].role == "idle"
+    engine.set_dynamic("p1", on=False)
+    run(engine, 0.2)
+    assert engine.state["R2"].role == "" and engine.state["R1"].role == ""
+    sol = solve_angles(engine.fixtures["R2"].R, engine.fixtures["R2"].pos, np.array([3.8, 4.4, 0]),
+                       engine.fixtures["R2"].pan_range, engine.fixtures["R2"].tilt_range)
+    assert engine.state["R2"].pan == pytest.approx(sol[0], abs=0.5)
+
+
+def test_dynamic_count_is_validated_and_clamped_to_the_pool(engine):
+    with pytest.raises(ValueError):
+        engine.set_dynamic("p1", count=0)
+    _dyn_setup(engine, fids=("R1", "R2"), count=8, prepare=2)  # more than the pool holds
+    engine.set_target("p1", [3.8, 4.4, 0])
+    run(engine, 0.1)
+    assert set(_roles(engine, ("R1", "R2")).values()) == {"active"}
+
+
+def test_dynamic_reach_makes_a_far_light_count_as_closer(engine):
+    _dyn_setup(engine, fids=("R2", "R3"), count=1, prepare=0)
+    mid = (engine.fixtures["R2"].pos + engine.fixtures["R3"].pos) / 2
+    engine.set_target("p1", mid - [1.0, 0, 0])  # R2 is clearly nearer
+    run(engine, 0.1)
+    assert engine.state["R2"].role == "active"
+    engine.set_dynamic("p1", on=False)
+    engine.set_dynamic("p1", on=True)
+    engine.fixtures["R3"].reach = 10.0  # R3 (2.3 m off) now counts as 0.23 m, closer than R2 (0.3 m)
+    run(engine, 0.1)
+    assert engine.state["R3"].role == "active" and engine.state["R2"].role == "idle"

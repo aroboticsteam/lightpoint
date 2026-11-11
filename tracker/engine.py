@@ -21,8 +21,13 @@ class State:
     pan: float = 0.0
     tilt: float = 0.0
     reachable: bool = True
+    role: str = ""  # dynamic mode only: active (lit and following) | armed (pre-aimed, may be next) | idle (pointing down)
 
 
+DYN_DEFAULT_COUNT = 4  # dynamic mode: how many of a person's lights follow the pointer
+DYN_DEFAULT_PREPARE = 1  # ...and how many more, next in line, are pre-aimed so they are ready when needed
+DYN_MAX = 16
+DOWN = np.array([0.0, 0.0, -1.0])
 RELEASE_SLEW_DEG_S = 90.0  # a head handed back to the board eases there at this rate instead of snapping
 
 
@@ -37,7 +42,17 @@ class Engine:
         self.fixtures = {f.id: f for f in cfg.fixtures}
         self.state = {f.id: State() for f in cfg.fixtures}
         self.samples: dict[str, list[Sample]] = {f.id: [] for f in cfg.fixtures}
-        self.operators: dict[str, dict] = {o["id"]: {"name": o["name"], "target": None} for o in cfg.operators}
+        self.operators: dict[str, dict] = {
+            o["id"]: {
+                "name": o["name"],
+                "target": None,
+                "dynamic": bool(o.get("dynamic", False)),
+                "count": int(o.get("dynamic_count", DYN_DEFAULT_COUNT)),
+                "prepare": int(o.get("dynamic_prepare", DYN_DEFAULT_PREPARE)),
+                "active": [],  # fixture ids currently in the active set (kept for hysteresis)
+            }
+            for o in cfg.operators
+        }
         self.owner: dict[str, str | None] = {f.id: None for f in cfg.fixtures}
         for o in cfg.operators:
             for fid in o["fixtures"]:
@@ -70,6 +85,50 @@ class Engine:
         if mode != "off" and self.owner[fid] is None:
             raise ValueError(f"{fid} is not assigned to an operator")
         self.state[fid].mode = mode
+
+    def set_dynamic(self, op: str, on: bool | None = None, count: int | None = None, prepare: int | None = None) -> None:
+        """Dynamic mode: of the lights I hold, only the `count` closest to my pointer follow it, the next `prepare`
+        are pre-aimed, and the rest point straight down. The choice is re-made as the pointer moves."""
+        o = self.operators[op]
+        if count is not None:
+            if not 1 <= count <= DYN_MAX:
+                raise ValueError(f"count must be 1 to {DYN_MAX}")
+            o["count"] = count
+        if prepare is not None:
+            if not 0 <= prepare <= DYN_MAX:
+                raise ValueError(f"prepare must be 0 to {DYN_MAX}")
+            o["prepare"] = prepare
+        if on is not None:
+            o["dynamic"] = bool(on)
+            if not on:
+                o["active"] = []
+
+    def _plan_dynamic(self) -> None:
+        """Give every light of a dynamic operator its role for this tick."""
+        for st in self.state.values():
+            st.role = ""
+        hyst = self.cfg.dynamic_hysteresis_m
+        for op, o in self.operators.items():
+            if not o["dynamic"]:
+                continue
+            pool = [fid for fid in self.fixtures if self.owner[fid] == op and self.state[fid].mode != "off"]
+            target = o["target"]
+            if target is None:  # nothing to follow: everything points down
+                o["active"] = []
+                for fid in pool:
+                    self.state[fid].role = "idle"
+                continue
+            prev = set(o["active"])
+            # members of the current set get a head start, so two similar distances do not make a light flicker in and out
+            score = {
+                fid: float(np.linalg.norm(self.fixtures[fid].pos - target)) / self.fixtures[fid].reach - (hyst if fid in prev else 0.0)
+                for fid in pool
+            }
+            order = sorted(pool, key=score.__getitem__)
+            n, p = o["count"], o["prepare"]
+            o["active"] = order[:n]
+            for i, fid in enumerate(order):
+                self.state[fid].role = "active" if i < n else "armed" if i < n + p else "idle"
 
     def claim(self, op: str, fid: str) -> None:
         """An operator selects a free head; it starts following their target."""
@@ -113,6 +172,7 @@ class Engine:
     # -- output --------------------------------------------------------
     def tick(self, dt: float) -> bytes:
         out = bytearray(self.board)
+        self._plan_dynamic()
         for fid, fx in self.fixtures.items():
             self._step(fx, self.state[fid], dt, out)
         return bytes(out)
@@ -140,7 +200,7 @@ class Engine:
                 return
         else:
             sol = None
-            target = self.target_for(fx.id)
+            target = fx.pos + DOWN if st.role == "idle" else self.target_for(fx.id)
             if target is not None:
                 sol = solve_angles(fx.R, fx.pos, target, fx.pan_range, fx.tilt_range, (st.pan, st.tilt))
             if sol is not None:
@@ -150,7 +210,11 @@ class Engine:
                 else:  # no cap: the head goes straight to where the pointer is
                     st.pan, st.tilt = sol[0], sol[1]
                 st.reachable = sol[2]
-            if st.mode == "full":
+            # Dynamic mode: lights that follow are on, lights that are pre-aiming or parked pointing down are off.
+            if st.role in ("armed", "idle"):
+                for ch, v in prof.blackout.items():
+                    out[fx.slot(ch)] = v
+            elif st.role == "active" or st.mode == "full":
                 for ch, v in prof.takeover.items():
                     out[fx.slot(ch)] = v
 
@@ -193,6 +257,9 @@ class Engine:
                     "id": o,
                     "name": v["name"],
                     "target": None if v["target"] is None else [round(float(x), 3) for x in v["target"]],
+                    "dynamic": v["dynamic"],
+                    "count": v["count"],
+                    "prepare": v["prepare"],
                     "fixtures": self.operator_fixtures(o),
                 }
                 for o, v in self.operators.items()
@@ -205,6 +272,7 @@ class Engine:
                     "pos": [round(float(v), 3) for v in fx.pos],
                     "mode": st.mode,
                     "phase": st.phase,
+                    "role": st.role,
                     "pan": round(st.pan, 1),
                     "tilt": round(st.tilt, 1),
                     "reachable": st.reachable,
