@@ -55,6 +55,7 @@ def load_config(path: str | Path) -> Config:
                 max_slew=f.get("max_slew_deg_s", 0.0),
                 calibrated="orientation" in f,
                 reach=float(f.get("reach", 1.0)),
+                group=str(f.get("group", "")),
             )
         )
     cfg = Config(
