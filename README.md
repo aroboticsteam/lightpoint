@@ -67,7 +67,7 @@ That file is git-ignored (it holds your site's positions and calibration). Start
 - `operators`: `{id, name, fixtures}`. Add or rename people here; `fixtures` is an optional starting selection
   (empty by default).
 - `fixtures`: `pos_magicq` is `[x, y = HEIGHT, z = depth]` as in the MagicQ patch, origin at the front-left corner.
-  Optional per head: `pan_range`, `tilt_range`, `pan_invert`, `tilt_invert`, `max_slew_deg_s` (default 60).
+  Optional per head: `pan_range`, `tilt_range`, `pan_invert`, `tilt_invert`, `max_slew_deg_s` (default 0 = no software cap: the head follows the pointer instantly and only its own motors limit the speed; set e.g. 60 to cap tracking speed). Handing a head back to the board always eases at 90 deg/s.
   `orientation` (3x3) is written by calibration.
 - Profiles live in `tracker/fixtures.py`, from the manufacturer charts: Rogue R2X Wash 17ch, Azor S2 28CH Extended,
   Azor SP2 43CH Extended.

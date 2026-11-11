@@ -51,7 +51,7 @@ def load_config(path: str | Path) -> Config:
                 tilt_range=f.get("tilt_range", prof.tilt_range),
                 pan_invert=f.get("pan_invert", False),
                 tilt_invert=f.get("tilt_invert", False),
-                max_slew=f.get("max_slew_deg_s", 60.0),
+                max_slew=f.get("max_slew_deg_s", 0.0),
                 calibrated="orientation" in f,
             )
         )
