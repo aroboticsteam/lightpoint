@@ -121,7 +121,8 @@ class Engine:
             prev = set(o["active"])
             # members of the current set get a head start, so two similar distances do not make a light flicker in and out
             score = {
-                fid: float(np.linalg.norm(self.fixtures[fid].pos - target)) - (hyst if fid in prev else 0.0) for fid in pool
+                fid: float(np.linalg.norm(self.fixtures[fid].pos - target)) / self.fixtures[fid].reach - (hyst if fid in prev else 0.0)
+                for fid in pool
             }
             order = sorted(pool, key=score.__getitem__)
             n, p = o["count"], o["prepare"]
@@ -209,7 +210,11 @@ class Engine:
                 else:  # no cap: the head goes straight to where the pointer is
                     st.pan, st.tilt = sol[0], sol[1]
                 st.reachable = sol[2]
-            if st.mode == "full" and st.role in ("", "active"):
+            # Dynamic mode: lights that follow are on, lights that are pre-aiming or parked pointing down are off.
+            if st.role in ("armed", "idle"):
+                for ch, v in prof.blackout.items():
+                    out[fx.slot(ch)] = v
+            elif st.role == "active" or st.mode == "full":
                 for ch, v in prof.takeover.items():
                     out[fx.slot(ch)] = v
 

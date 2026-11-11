@@ -54,6 +54,7 @@ def load_config(path: str | Path) -> Config:
                 tilt_invert=f.get("tilt_invert", False),
                 max_slew=f.get("max_slew_deg_s", 0.0),
                 calibrated="orientation" in f,
+                reach=float(f.get("reach", 1.0)),
             )
         )
     cfg = Config(
@@ -71,6 +72,9 @@ def load_config(path: str | Path) -> Config:
         disconnect_release_s=raw.get("disconnect_release_s", 15.0),
         dynamic_hysteresis_m=raw.get("dynamic_hysteresis_m", 0.75),
     )
+    for f in fixtures:
+        if not f.reach > 0:
+            raise ValueError(f"fixture {f.id}: reach must be greater than 0")
     known, seen = {f.id for f in fixtures}, set()
     for o in cfg.operators:
         for fid in o["fixtures"]:
