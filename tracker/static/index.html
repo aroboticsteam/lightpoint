@@ -130,7 +130,7 @@ const mine = f => OP ? f.owner === OP : true;
 
 // ---- plan --------------------------------------------------------------------------------------
 function layout() {
-  const hall = S.hall, W = 640, pad = 34, sc = (W - 2*pad) / hall.width;
+  const hall = S.hall, W = 572, pad = 0, sc = W / hall.width;
   const H = Math.round(hall.depth * sc + 2*pad), dpr = window.devicePixelRatio || 1;
   if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
   M = { W, H, pad, sc, dpr };
@@ -156,12 +156,10 @@ function draw() {
   const hall = S.hall;
   if (planOk) { const [hx, hy] = px(0, 0); ctx.drawImage(plan, hx, hy, hall.width*M.sc, hall.depth*M.sc); }
   ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--mut'); ctx.lineWidth = 1;
-  for (let x = 0; x <= hall.width; x += 2) { const [a,b] = px(x,0), [,c] = px(x,hall.depth); ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(a,c); ctx.stroke(); ctx.fillText(x, a, M.H-14); }
-  for (let y = 0; y <= hall.depth; y += 2) { const [a,b] = px(0,y), [c] = px(hall.width,y); ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,b); ctx.stroke(); ctx.textAlign='right'; ctx.fillText(y, a-6, b+4); ctx.textAlign='center'; }
-  ctx.strokeStyle = css('--fg'); ctx.lineWidth = 3;
   const [fx0,fy0] = px(0,0), [fx1] = px(hall.width,0);
-  ctx.beginPath(); ctx.moveTo(fx0,fy0); ctx.lineTo(fx1,fy0); ctx.stroke();
-  ctx.fillStyle = css('--fg'); ctx.fillText('FRONT WALL', (fx0+fx1)/2, fy0-10);
+  ctx.font = 'bold 11px system-ui'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.fillStyle = '#fff';
+  ctx.strokeText('FRONT WALL', (fx0+fx1)/2, fy0+14); ctx.fillText('FRONT WALL', (fx0+fx1)/2, fy0+14);
+  ctx.font = '11px system-ui';
 
   for (const f of S.fixtures) {
     const [x,y] = px(f.pos[0], f.pos[1]);
