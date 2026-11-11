@@ -338,3 +338,49 @@ def test_dynamic_reach_makes_a_far_light_count_as_closer(engine):
     engine.fixtures["R3"].reach = 10.0  # R3 (2.3 m off) now counts as 0.23 m, closer than R2 (0.3 m)
     run(engine, 0.1)
     assert engine.state["R3"].role == "active" and engine.state["R2"].role == "idle"
+
+
+# -- dynamic mode: keep spots for the back bar -----------------------------------------------------
+def _back_setup(engine, count=2, back_min=1):
+    for fid in ("P1", "P2", "R1", "R2", "S1"):
+        engine.claim("p1", fid)
+    for fid in ("P1", "P2"):
+        engine.fixtures[fid].group = "back"
+    engine.set_dynamic("p1", on=True, count=count, prepare=0, back_min=back_min)
+
+
+def test_back_bar_gets_at_least_one_of_the_spots_even_when_front_lights_are_closer(engine):
+    _back_setup(engine, count=2, back_min=1)
+    engine.set_target("p1", [4.5, 4.2, 0])  # far from the back bar (about 15 m), right under R1/S1
+    run(engine, 0.2)
+    roles = _roles(engine, ("P1", "P2", "R1", "R2", "S1"))
+    active = {f for f, r in roles.items() if r == "active"}
+    assert len(active) == 2 and len(active & {"P1", "P2"}) == 1
+    assert "P1" in active  # the closest back light of the two (P1 is at x=5.9)
+    assert "R1" in active or "S1" in active  # and the closest front one keeps the other spot
+    assert {f for f, r in roles.items() if r == "idle"} >= {"R2"}
+
+
+def test_back_bar_option_off_picks_by_distance_only(engine):
+    _back_setup(engine, count=2, back_min=0)
+    engine.set_target("p1", [4.5, 4.2, 0])
+    run(engine, 0.2)
+    assert {f for f, r in _roles(engine, ("P1", "P2", "R1", "R2", "S1")).items() if r == "active"} == {"R1", "S1"}
+
+
+def test_back_bar_reservation_is_capped_by_the_spots_and_by_how_many_back_lights_there_are(engine):
+    _back_setup(engine, count=2, back_min=4)  # asks for more than the two spots / two back lights
+    engine.set_target("p1", [4.5, 4.2, 0])
+    run(engine, 0.2)
+    assert {f for f, r in _roles(engine, ("P1", "P2", "R1", "R2", "S1")).items() if r == "active"} == {"P1", "P2"}
+    engine.set_dynamic("p1", count=3, back_min=3)  # three spots, two back lights: both back + the closest front one
+    run(engine, 0.2)
+    active = {f for f, r in _roles(engine, ("P1", "P2", "R1", "R2", "S1")).items() if r == "active"}
+    assert active >= {"P1", "P2"} and len(active) == 3 and active & {"R1", "S1"}
+
+
+def test_back_bar_reservation_changes_nothing_when_a_back_light_is_already_close(engine):
+    _back_setup(engine, count=2, back_min=1)
+    engine.set_target("p1", [5.9, 18.5, 0])  # under the back bar
+    run(engine, 0.2)
+    assert {f for f, r in _roles(engine, ("P1", "P2", "R1", "R2", "S1")).items() if r == "active"} == {"P1", "P2"}
