@@ -88,3 +88,19 @@ def test_dynamic_command(engine):
             apply(engine, {"type": "dynamic", "op": "p1", **bad})
     with pytest.raises(CommandError, match="unknown operator"):
         apply(engine, {"type": "dynamic", "op": "nobody", "on": True})
+
+
+def test_reach_is_read_from_the_config_and_validated(tmp_path):
+    import json
+
+    from tracker.config import load_config
+
+    cfg = json.loads(CONFIG.read_text())
+    cfg["fixtures"][0]["reach"] = 1.35
+    p = tmp_path / "f.json"
+    p.write_text(json.dumps(cfg))
+    assert load_config(p).fixtures[0].reach == 1.35 and load_config(p).fixtures[1].reach == 1.0
+    cfg["fixtures"][0]["reach"] = 0
+    p.write_text(json.dumps(cfg))
+    with pytest.raises(ValueError, match="reach"):
+        load_config(p)

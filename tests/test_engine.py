@@ -250,19 +250,38 @@ def test_dynamic_set_follows_the_pointer(engine):
     assert engine.state["R1"].role == "idle"
 
 
-def test_dynamic_prepared_heads_aim_at_the_pointer_but_get_no_takeover(engine):
-    _dyn_setup(engine, fids=("R1", "R2", "R3"), count=1, prepare=1)
+def test_dynamic_lights_follow_on_and_prepared_or_parked_ones_are_off(engine):
+    _dyn_setup(engine, fids=("R1", "R2", "R3"), count=1, prepare=1)  # modes stay "pan_tilt" (Follow)
+    dimmer = 6  # Rogue dimmer channel
     for fid in ("R1", "R2", "R3"):
-        engine.set_mode(fid, "full")
+        fx = engine.fixtures[fid]
+        engine.board[fx.slot(dimmer)] = 200  # the board has them all lit
     engine.set_target("p1", [3.8, 4.4, 0])
     frame = run(engine, 0.3)
     assert engine.state["R1"].role == "active" and engine.state["R2"].role == "armed" and engine.state["R3"].role == "idle"
-    fx1, fx2 = engine.fixtures["R1"], engine.fixtures["R2"]
-    dimmer = 6  # Rogue takeover channel
-    assert frame[fx1.slot(dimmer)] == 255  # the active head is taken over
-    assert frame[fx2.slot(dimmer)] == engine.board[fx2.slot(dimmer)]  # the prepared one is only aimed
+    fx1, fx2, fx3 = (engine.fixtures[f] for f in ("R1", "R2", "R3"))
+    assert frame[fx1.slot(dimmer)] == 255  # following: on
+    assert frame[fx2.slot(dimmer)] == 0  # pre-aiming: off
+    assert frame[fx3.slot(dimmer)] == 0  # parked pointing down: off
+    # the prepared head is still aimed at the pointer
     sol = solve_angles(fx2.R, fx2.pos, np.array([3.8, 4.4, 0]), fx2.pan_range, fx2.tilt_range)
     assert engine.state["R2"].pan == pytest.approx(sol[0], abs=0.5)
+    # and it comes on the moment it is promoted
+    engine.set_target("p1", [7.5, 4.0, 0])
+    frame = run(engine, 0.1)
+    assert engine.state["R2"].role == "active" and frame[fx2.slot(dimmer)] == 255
+    assert frame[fx1.slot(dimmer)] in (0, 255) and engine.state["R1"].role != "active" and frame[fx1.slot(dimmer)] == 0
+
+
+def test_dynamic_without_a_target_everything_is_dark_and_pointing_down(engine):
+    _dyn_setup(engine, fids=("S1", "P1"))
+    for fid, ch in (("S1", 5), ("P1", 5)):
+        engine.board[engine.fixtures[fid].slot(ch)] = 180
+    frame = run(engine, 0.2)
+    for fid in ("S1", "P1"):
+        fx = engine.fixtures[fid]
+        assert engine.state[fid].role == "idle"
+        assert frame[fx.slot(5)] == 0 and frame[fx.slot(6)] == 0  # 16-bit dimmer off
 
 
 def test_dynamic_hysteresis_stops_flicker_between_similar_distances(engine):
@@ -306,3 +325,16 @@ def test_dynamic_count_is_validated_and_clamped_to_the_pool(engine):
     engine.set_target("p1", [3.8, 4.4, 0])
     run(engine, 0.1)
     assert set(_roles(engine, ("R1", "R2")).values()) == {"active"}
+
+
+def test_dynamic_reach_makes_a_far_light_count_as_closer(engine):
+    _dyn_setup(engine, fids=("R2", "R3"), count=1, prepare=0)
+    mid = (engine.fixtures["R2"].pos + engine.fixtures["R3"].pos) / 2
+    engine.set_target("p1", mid - [1.0, 0, 0])  # R2 is clearly nearer
+    run(engine, 0.1)
+    assert engine.state["R2"].role == "active"
+    engine.set_dynamic("p1", on=False)
+    engine.set_dynamic("p1", on=True)
+    engine.fixtures["R3"].reach = 10.0  # R3 (2.3 m off) now counts as 0.23 m, closer than R2 (0.3 m)
+    run(engine, 0.1)
+    assert engine.state["R3"].role == "active" and engine.state["R2"].role == "idle"
