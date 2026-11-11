@@ -45,6 +45,14 @@ docker run --rm --network host -v "$PWD/config:/config:ro" lightpoint
   negative disables) and your target is cleared. Lights
   held by someone else are greyed out and say who has them. Click or drag on the plan to aim. Per light you can pick
   *Hold (board)*, *Follow* or *Full control*. There is no login.
+- **Dynamic mode** (tick *Dynamic* on your page): pick the lights you might want, then only the *closest* N to your pointer
+  (default 4; choose 1-8) follow it. As you move the pointer the set changes by itself, so a light further away drops out
+  and a nearer one takes over. The next *ready* lights in line (default 1; 0-4) are pre-aimed at the pointer, but not
+  lit by *Full control*, so they are in position when needed. Every other light of yours points straight down. With no
+  target set, all of them point down. A light has to be `hysteresis` closer (0.75 m, config `dynamic_hysteresis_m`)
+  to take a place from one that already has it, so two almost equally near lights do not flicker in and out. Lights set
+  to *Hold (board)* are not part of the pool. On the plan, parked lights are dimmed with a down arrow and ready lights
+  have a dashed ring. Command: `{"type": "dynamic", "op": "p1", "on": true, "count": 4, "prepare": 1}` (any field optional).
 - **`/`** overview: who holds what (an operator can reassign or free any light), "Release every head", and
   calibration.
 - Everything is live: pages talk over `/ws`, send commands, and receive the full state whenever anything changes
@@ -65,7 +73,8 @@ That file is git-ignored (it holds your site's positions and calibration). Start
   (or host) or the proxy would hear itself.
 - `disconnect_release_s`: grace period before a closed operator page releases its lights.
 - `operators`: `{id, name, fixtures}`. Add or rename people here; `fixtures` is an optional starting selection
-  (empty by default).
+  (empty by default). Optional `dynamic` (start in dynamic mode), `dynamic_count` (4) and `dynamic_prepare` (1).
+- `dynamic_hysteresis_m` (default 0.75): see *Dynamic mode*.
 - `fixtures`: `pos_magicq` is `[x, y = HEIGHT, z = depth]` as in the MagicQ patch, origin at the front-left corner.
   Optional per head: `pan_range`, `tilt_range`, `pan_invert`, `tilt_invert`, `max_slew_deg_s` (default 0 = no software cap: the head follows the pointer instantly and only its own motors limit the speed; set e.g. 60 to cap tracking speed). Handing a head back to the board always eases at 90 deg/s.
   `orientation` (3x3) is written by calibration.

@@ -25,6 +25,7 @@ class Config:
     fixtures: list[Fixture] = field(default_factory=list)
     operators: list[dict] = field(default_factory=list)  # {"id", "name", "fixtures": [ids]}
     disconnect_release_s: float = 15.0  # a person's lights go back to the board this long after their page closes
+    dynamic_hysteresis_m: float = 0.75  # dynamic mode: a light must be this much closer to take a place from a current one
 
 
 def magicq_to_world(p) -> np.ndarray:
@@ -68,6 +69,7 @@ def load_config(path: str | Path) -> Config:
         fixtures=fixtures,
         operators=raw.get("operators", []),
         disconnect_release_s=raw.get("disconnect_release_s", 15.0),
+        dynamic_hysteresis_m=raw.get("dynamic_hysteresis_m", 0.75),
     )
     known, seen = {f.id for f in fixtures}, set()
     for o in cfg.operators:

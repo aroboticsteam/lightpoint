@@ -38,6 +38,7 @@
   .chip.mine { background:var(--acc-bg); border-color:var(--acc); font-weight:600; }
   .chip.taken { opacity:.4; cursor:not-allowed; }
   .chip small { margin-left:6px; font-weight:400; }
+  label { display:inline-flex; gap:6px; align-items:center; }
   .links { display:flex; gap:8px; flex-wrap:wrap; }
   .links a { padding:4px 10px; border:1px solid var(--line); border-radius:6px; color:var(--fg); text-decoration:none; }
   .links a:hover { border-color:var(--acc); }
@@ -73,6 +74,9 @@
     <div class="row" id="opbar" hidden>
       <label>Target height (m) <input id="h" type="number" step="0.1" value="0" min="0"></label>
       <button id="cleart">Clear target</button>
+      <label title="Only the closest lights to your pointer follow it; the rest point straight down"><input id="dyn" type="checkbox"> Dynamic</label>
+      <label class="dynopt">closest <select id="dyncount"></select></label>
+      <label class="dynopt" title="Next-closest lights that pre-aim so they are ready when the pointer gets near">ready <select id="dynprep"></select></label>
       <small id="nolights" hidden>Select lights above to start following.</small>
     </div>
     <div class="row" id="adminbar" hidden><small>Click the plan to set a calibration point (a mark on the floor).</small></div>
@@ -164,10 +168,10 @@ function draw() {
   for (const f of S.fixtures) {
     const [x,y] = px(f.pos[0], f.pos[1]);
     const alpha = mine(f) ? 1 : 0.3, op = f.owner && opById(f.owner), t = op && op.target;
-    ctx.globalAlpha = alpha;
-    if (t && f.mode !== 'off') {
+    ctx.globalAlpha = f.role === 'idle' ? alpha * .55 : alpha;
+    if (t && f.mode !== 'off' && f.role !== 'idle') {
       const [tx,ty] = px(t[0], t[1]);
-      ctx.strokeStyle = colorFor(f.profile); ctx.lineWidth = 1.5; ctx.setLineDash([4,4]); ctx.globalAlpha = alpha * (f.reachable ? .6 : .3);
+      ctx.strokeStyle = colorFor(f.profile); ctx.lineWidth = 1.5; ctx.setLineDash([4,4]); ctx.globalAlpha = alpha * (f.reachable ? (f.role === 'armed' ? .3 : .6) : .3);
       ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(tx,ty); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = alpha;
     }
     ctx.fillStyle = colorFor(f.profile); ctx.beginPath();
@@ -175,8 +179,8 @@ function draw() {
     else if (f.profile.startsWith('Azor S2')) ctx.rect(x-6.5,y-6.5,13,13);
     else { ctx.moveTo(x,y-9); ctx.lineTo(x+9,y); ctx.lineTo(x,y+9); ctx.lineTo(x-9,y); ctx.closePath(); }
     ctx.fill();
-    if (f.mode !== 'off') { ctx.strokeStyle = css('--fg'); ctx.lineWidth = 2; ctx.stroke(); }
-    ctx.fillStyle = css('--fg'); ctx.fillText(f.id, x, y-13);
+    if (f.mode !== 'off') { ctx.strokeStyle = css('--fg'); ctx.lineWidth = f.role === 'armed' ? 1 : 2; if (f.role === 'armed') ctx.setLineDash([3,2]); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.fillStyle = css('--fg'); ctx.fillText(f.id + (f.role === 'idle' ? ' ↓' : ''), x, y-13);
     ctx.globalAlpha = 1;
   }
   for (const o of S.operators) {
@@ -186,6 +190,17 @@ function draw() {
     else { ctx.globalAlpha = OP ? .45 : 1; cross(x, y, css('--mut'), 6, o.name); ctx.globalAlpha = 1; }
   }
   if (!OP && calPoint) { const [x,y] = px(calPoint[0], calPoint[1]); cross(x, y, css('--acc'), 9, 'cal'); }
+}
+
+// ---- dynamic mode controls (built once) -------------------------------------------------------
+let dynBuilt = false;
+function buildDynamicControls() {
+  if (dynBuilt) return; dynBuilt = true;
+  $('dyncount').innerHTML = [1,2,3,4,5,6,7,8].map(n => `<option value="${n}">${n}</option>`).join('');
+  $('dynprep').innerHTML = [0,1,2,3,4].map(n => `<option value="${n}">${n}</option>`).join('');
+  $('dyn').onchange = () => send({ type:'dynamic', op:OP, on:$('dyn').checked });
+  $('dyncount').onchange = () => send({ type:'dynamic', op:OP, count:parseInt($('dyncount').value, 10) });
+  $('dynprep').onchange = () => send({ type:'dynamic', op:OP, prepare:parseInt($('dynprep').value, 10) });
 }
 
 // ---- lights picker (operator page): built once, then updated in place so clicks are never lost ---
@@ -247,6 +262,11 @@ function render() {
     $('title').textContent = o.name; document.title = `${o.name} — Light Tracker`;
     $('back').hidden = false; $('opbar').hidden = false; $('picker').hidden = false;
     $('nolights').hidden = o.fixtures.length > 0;
+    buildDynamicControls();
+    $('dyn').checked = o.dynamic;
+    for (const el of document.querySelectorAll('.dynopt')) el.hidden = !o.dynamic;
+    if (document.activeElement !== $('dyncount')) $('dyncount').value = o.count;
+    if (document.activeElement !== $('dynprep')) $('dynprep').value = o.prepare;
     const t = $('tgt'); t.hidden = false; t.textContent = o.target ? `target: ${o.target.map(v => v.toFixed(2)).join(', ')} m` : 'target: none';
     updateChips();
   } else {
@@ -261,7 +281,10 @@ function render() {
     if (document.activeElement !== sel) sel.value = OP ? f.mode : (f.owner || '');
     tr.querySelector('.pt').textContent = f.phase === 'passthrough' ? '—' : `${f.pan}° / ${f.tilt}°`;
     tr.querySelector('.ph').innerHTML = f.phase === 'passthrough' ? '<span class="mut">board</span>'
-      : f.phase === 'releasing' ? 'releasing' : (f.reachable ? (f.mode === 'full' ? 'full control' : 'following') : '<span class="warn">out of range</span>');
+      : f.phase === 'releasing' ? 'releasing'
+      : f.role === 'idle' ? '<span class="mut">pointing down</span>'
+      : f.role === 'armed' ? 'ready (next)'
+      : (f.reachable ? (f.mode === 'full' ? 'full control' : 'following') : '<span class="warn">out of range</span>');
     const n = tr.querySelector('.n');
     if (n) n.innerHTML = f.calibrated ? `<span class="mut">calibrated</span> · ${f.samples}` : `<span class="warn">uncalibrated</span> · ${f.samples}`;
   }
