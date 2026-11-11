@@ -49,6 +49,7 @@ class Engine:
                 "dynamic": bool(o.get("dynamic", False)),
                 "count": int(o.get("dynamic_count", DYN_DEFAULT_COUNT)),
                 "prepare": int(o.get("dynamic_prepare", DYN_DEFAULT_PREPARE)),
+                "back_min": int(o.get("dynamic_back_min", 0)),
                 "active": [],  # fixture ids currently in the active set (kept for hysteresis)
             }
             for o in cfg.operators
@@ -86,7 +87,10 @@ class Engine:
             raise ValueError(f"{fid} is not assigned to an operator")
         self.state[fid].mode = mode
 
-    def set_dynamic(self, op: str, on: bool | None = None, count: int | None = None, prepare: int | None = None) -> None:
+    def set_dynamic(
+        self, op: str, on: bool | None = None, count: int | None = None, prepare: int | None = None,
+        back_min: int | None = None,
+    ) -> None:
         """Dynamic mode: of the lights I hold, only the `count` closest to my pointer follow it, the next `prepare`
         are pre-aimed, and the rest point straight down. The choice is re-made as the pointer moves."""
         o = self.operators[op]
@@ -98,6 +102,10 @@ class Engine:
             if not 0 <= prepare <= DYN_MAX:
                 raise ValueError(f"prepare must be 0 to {DYN_MAX}")
             o["prepare"] = prepare
+        if back_min is not None:
+            if not 0 <= back_min <= DYN_MAX:
+                raise ValueError(f"back_min must be 0 to {DYN_MAX}")
+            o["back_min"] = back_min
         if on is not None:
             o["dynamic"] = bool(on)
             if not on:
@@ -126,7 +134,20 @@ class Engine:
             }
             order = sorted(pool, key=score.__getitem__)
             n, p = o["count"], o["prepare"]
-            o["active"] = order[:n]
+            active = order[:n]
+            # keep at least `back_min` of the spots for the back bar: the closest back lights that are not in yet take
+            # the places of the furthest non-back lights (as many back lights as the pool has, never more than the spots)
+            want = min(o["back_min"], n)
+            if want:
+                back = [f for f in order if self.fixtures[f].group == "back"]
+                need = min(want, len(back)) - sum(f in back for f in active)
+                if need > 0:
+                    extra = [f for f in back if f not in active][:need]
+                    drop = [f for f in reversed(active) if f not in back][: len(extra)]
+                    active = [f for f in active if f not in drop] + extra
+                    active.sort(key=score.__getitem__)
+                    order = active + [f for f in order if f not in active]
+            o["active"] = active
             for i, fid in enumerate(order):
                 self.state[fid].role = "active" if i < n else "armed" if i < n + p else "idle"
 
@@ -260,6 +281,7 @@ class Engine:
                     "dynamic": v["dynamic"],
                     "count": v["count"],
                     "prepare": v["prepare"],
+                    "back_min": v["back_min"],
                     "fixtures": self.operator_fixtures(o),
                 }
                 for o, v in self.operators.items()
@@ -273,6 +295,7 @@ class Engine:
                     "mode": st.mode,
                     "phase": st.phase,
                     "role": st.role,
+                    "group": fx.group,
                     "pan": round(st.pan, 1),
                     "tilt": round(st.tilt, 1),
                     "reachable": st.reachable,

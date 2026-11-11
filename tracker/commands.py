@@ -69,12 +69,12 @@ def apply(engine: Engine, msg: dict) -> dict | None:
             for fid in ids:
                 engine.set_mode(fid, msg.get("mode"))
 
-        elif kind == "dynamic":  # {op, on?, count?, prepare?}: closest-N mode for my lights
+        elif kind == "dynamic":  # {op, on?, count?, prepare?, back_min?}: closest-N mode for my lights
             op = _op(engine, msg)
-            for key in ("count", "prepare"):
+            for key in ("count", "prepare", "back_min"):
                 if key in msg and (isinstance(msg[key], bool) or not isinstance(msg[key], int)):
                     raise CommandError(f"{key} must be a whole number")
-            engine.set_dynamic(op, msg.get("on"), msg.get("count"), msg.get("prepare"))
+            engine.set_dynamic(op, msg.get("on"), msg.get("count"), msg.get("prepare"), msg.get("back_min"))
 
         elif kind == "assign":  # {fid, op|null}: overview override
             engine.assign(_fid(engine, msg), msg.get("op") or None)
