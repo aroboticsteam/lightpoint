@@ -104,3 +104,11 @@ def test_reach_is_read_from_the_config_and_validated(tmp_path):
     p.write_text(json.dumps(cfg))
     with pytest.raises(ValueError, match="reach"):
         load_config(p)
+
+
+def test_dynamic_back_min_command(engine):
+    apply(engine, {"type": "dynamic", "op": "p1", "back_min": 1})
+    assert engine.operators["p1"]["back_min"] == 1
+    for bad in ({"back_min": -1}, {"back_min": 99}, {"back_min": "1"}, {"back_min": True}):
+        with pytest.raises(CommandError):
+            apply(engine, {"type": "dynamic", "op": "p1", **bad})

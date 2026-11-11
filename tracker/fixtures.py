@@ -62,6 +62,7 @@ class Fixture:
     tilt_invert: bool = False
     max_slew: float = 0.0  # deg/s cap while tracking; 0 = follow the target instantly (the head's own motors set the pace)
     calibrated: bool = False
+    group: str = ""  # free-form tag; dynamic mode can reserve spots for the "back" group (the back bar)
     reach: float = 1.0  # dynamic mode: distance to the pointer is divided by this, so 1.35 = counts as 1.35x closer
 
     def slot(self, channel: int) -> int:
