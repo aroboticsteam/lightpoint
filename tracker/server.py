@@ -163,7 +163,11 @@ def make_app(cfg: Config) -> web.Application:
             raise web.HTTPNotFound(text="unknown operator")
         return web.FileResponse(STATIC / "index.html")
 
+    async def floorplan(_):
+        return web.FileResponse(STATIC / "floorplan.png")
+
     app.router.add_get("/", index)
+    app.router.add_get("/floorplan.png", floorplan)
     app.router.add_get("/op/{op}", op_page)
     app.router.add_get("/ws", ws_handler)
     app.router.add_get("/api/state", state)
