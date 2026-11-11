@@ -137,6 +137,11 @@ function layout() {
 }
 const px = (x, y) => [M.pad + x*M.sc, M.pad + y*M.sc];
 
+// Floor plan behind the grid: stretched to exactly the hall rectangle, so the plan's scale is the canvas's scale.
+const plan = new Image(); let planOk = false;
+plan.onload = () => { planOk = true; draw(); };
+plan.src = '/floorplan.png';
+
 function cross(x, y, color, r, label) {
   ctx.strokeStyle = color; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.moveTo(x-r-5,y); ctx.lineTo(x+r+5,y); ctx.moveTo(x,y-r-5); ctx.lineTo(x,y+r+5); ctx.stroke();
@@ -149,6 +154,7 @@ function draw() {
   ctx.setTransform(M.dpr,0,0,M.dpr,0,0); ctx.clearRect(0,0,M.W,M.H);
   ctx.font = '11px system-ui'; ctx.textAlign = 'center';
   const hall = S.hall;
+  if (planOk) { const [hx, hy] = px(0, 0); ctx.drawImage(plan, hx, hy, hall.width*M.sc, hall.depth*M.sc); }
   ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--mut'); ctx.lineWidth = 1;
   for (let x = 0; x <= hall.width; x += 2) { const [a,b] = px(x,0), [,c] = px(x,hall.depth); ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(a,c); ctx.stroke(); ctx.fillText(x, a, M.H-14); }
   for (let y = 0; y <= hall.depth; y += 2) { const [a,b] = px(0,y), [c] = px(hall.width,y); ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,b); ctx.stroke(); ctx.textAlign='right'; ctx.fillText(y, a-6, b+4); ctx.textAlign='center'; }
