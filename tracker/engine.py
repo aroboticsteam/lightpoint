@@ -23,6 +23,9 @@ class State:
     reachable: bool = True
 
 
+RELEASE_SLEW_DEG_S = 90.0  # a head handed back to the board eases there at this rate instead of snapping
+
+
 def _slew(cur: float, dest: float, max_step: float) -> float:
     return cur + max(-max_step, min(max_step, dest - cur))
 
@@ -128,8 +131,8 @@ class Engine:
         if st.phase == "passthrough":
             return
 
-        step = fx.max_slew * dt
         if st.phase == "releasing":
+            step = RELEASE_SLEW_DEG_S * dt
             dest = self.board_angles(fx)
             st.pan, st.tilt = _slew(st.pan, dest[0], step), _slew(st.tilt, dest[1], step)
             if abs(st.pan - dest[0]) < 0.1 and abs(st.tilt - dest[1]) < 0.1:
@@ -141,7 +144,11 @@ class Engine:
             if target is not None:
                 sol = solve_angles(fx.R, fx.pos, target, fx.pan_range, fx.tilt_range, (st.pan, st.tilt))
             if sol is not None:
-                st.pan, st.tilt = _slew(st.pan, sol[0], step), _slew(st.tilt, sol[1], step)
+                if fx.max_slew > 0:
+                    step = fx.max_slew * dt
+                    st.pan, st.tilt = _slew(st.pan, sol[0], step), _slew(st.tilt, sol[1], step)
+                else:  # no cap: the head goes straight to where the pointer is
+                    st.pan, st.tilt = sol[0], sol[1]
                 st.reachable = sol[2]
             if st.mode == "full":
                 for ch, v in prof.takeover.items():

@@ -109,6 +109,7 @@ def test_people_move_their_own_heads_independently(engine):
 
 def test_slew_limit_and_start_from_board(engine):
     fx = engine.fixtures["S1"]
+    fx.max_slew = 60.0  # an explicit cap; the default is no cap
     put16(engine, "S1", angle_to_dmx16(-100, fx.pan_range, fx.pan_invert), angle_to_dmx16(0, fx.tilt_range, fx.tilt_invert))
     engine.claim("p3", "S1")
     engine.set_target("p3", [14, 3, 0])
@@ -195,3 +196,17 @@ def test_calibration_updates_orientation(engine):
     rms = engine.solve("S1")
     assert rms < 0.05 and fx.calibrated
     assert "orientation" in next(f for f in json.loads(engine.cfg.path.read_text())["fixtures"] if f["id"] == "S1")
+
+
+def test_default_follows_target_instantly(engine):
+    fx = engine.fixtures["S1"]
+    assert fx.max_slew == 0.0
+    put16(engine, "S1", angle_to_dmx16(-100, fx.pan_range, fx.pan_invert), angle_to_dmx16(0, fx.tilt_range, fx.tilt_invert))
+    engine.claim("p3", "S1")
+    engine.set_target("p3", [14, 3, 0])
+    engine.tick(0.025)  # engages from the board's position
+    engine.tick(0.025)
+    first = engine.state["S1"].pan
+    engine.set_target("p3", [2, 20, 0])
+    engine.tick(0.025)  # one tick later the head is already at the new aim, not 1.5 deg closer
+    assert abs(engine.state["S1"].pan - first) > 5
