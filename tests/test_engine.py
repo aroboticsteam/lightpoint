@@ -384,3 +384,44 @@ def test_back_bar_reservation_changes_nothing_when_a_back_light_is_already_close
     engine.set_target("p1", [5.9, 18.5, 0])  # under the back bar
     run(engine, 0.2)
     assert {f for f, r in _roles(engine, ("P1", "P2", "R1", "R2", "S1")).items() if r == "active"} == {"P1", "P2"}
+
+
+# -- dynamic mode: keep spots for the front bar (and back bar together) ----------------------------
+def _bar_setup(engine, count, back_min=0, front_min=0):
+    for fid in ("P1", "P2", "R1", "R2", "S1"):
+        engine.claim("p1", fid)
+    for fid in ("P1", "P2"):
+        engine.fixtures[fid].group = "back"
+    for fid in ("R1", "R2", "S1"):
+        engine.fixtures[fid].group = "front"
+    engine.set_dynamic("p1", on=True, count=count, prepare=0, back_min=back_min, front_min=front_min)
+
+
+def _active(engine):
+    return {f for f, r in _roles(engine, ("P1", "P2", "R1", "R2", "S1")).items() if r == "active"}
+
+
+def test_front_bar_gets_at_least_one_spot_even_when_the_back_bar_is_closer(engine):
+    _bar_setup(engine, count=2, front_min=1)
+    engine.set_target("p1", [5.9, 18.5, 0])  # under the back bar, about 15 m from the front one
+    run(engine, 0.2)
+    active = _active(engine)
+    assert len(active) == 2 and len(active & {"R1", "R2", "S1"}) == 1 and active & {"P1", "P2"}
+
+
+def test_front_and_back_minimums_are_both_kept(engine):
+    _bar_setup(engine, count=3, back_min=1, front_min=2)
+    engine.set_target("p1", [5.9, 18.5, 0])  # back bar is far nearer: without the minimums it would take all three
+    run(engine, 0.2)
+    active = _active(engine)
+    assert len(active) == 3 and len(active & {"P1", "P2"}) == 1 and len(active & {"R1", "R2", "S1"}) == 2
+
+
+def test_front_option_off_picks_by_distance_and_the_two_minimums_share_the_spots(engine):
+    _bar_setup(engine, count=2, front_min=0)
+    engine.set_target("p1", [5.9, 18.5, 0])
+    run(engine, 0.2)
+    assert _active(engine) == {"P1", "P2"}
+    engine.set_dynamic("p1", back_min=2, front_min=2)  # 4 asked for, 2 spots: back first, front gets what is left
+    run(engine, 0.2)
+    assert _active(engine) == {"P1", "P2"}
