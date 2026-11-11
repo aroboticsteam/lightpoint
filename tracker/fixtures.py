@@ -56,7 +56,7 @@ class Fixture:
     tilt_range: float
     pan_invert: bool = False
     tilt_invert: bool = False
-    max_slew: float = 60.0  # deg/s the software lets pan/tilt move
+    max_slew: float = 0.0  # deg/s cap while tracking; 0 = follow the target instantly (the head's own motors set the pace)
     calibrated: bool = False
 
     def slot(self, channel: int) -> int:
