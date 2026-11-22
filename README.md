@@ -34,7 +34,7 @@ docker run --rm --network host -v "$PWD/config:/config:ro" lightpoint
 - Environment: `TRACKER_CONFIG` (default `/config/fixtures.json`), `WEB_HOST` (`0.0.0.0`), `WEB_PORT` (`8080`).
 - CI (`.github/workflows/docker.yml`) runs the tests, builds amd64 and arm64 natively (matrix, same scheme as vex-tm-tools) and publishes
   `ghcr.io/aroboticsteam/lightpoint` as one multi-arch manifest for amd64 and
-  arm64 (and mirrors to `registry.kmnet.uk/lightpoint` when the `KMNET_REGISTRY_*` secrets are set).
+  arm64 (and mirrors to `<MIRROR_REGISTRY>/lightpoint` when the `MIRROR_REGISTRY` repo variable and the `MIRROR_REGISTRY_*` secrets are set).
 
 ## Using it
 
