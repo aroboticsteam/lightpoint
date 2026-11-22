@@ -4,7 +4,8 @@ name: docker
 # <version>). Same scheme as vex-tm-tools: each arch is built natively
 # (amd64 on ubuntu-latest, arm64 on GitHub's arm runner, no QEMU), pushed by
 # digest, then merged into one multi-arch manifest. The manifest is mirrored to
-# registry.example.net/lightpoint when MIRROR_REGISTRY_USERNAME / _PASSWORD are set.
+# <MIRROR_REGISTRY>/lightpoint when the MIRROR_REGISTRY repo variable and the
+# MIRROR_REGISTRY_USERNAME / _PASSWORD secrets are set (the host is not in code).
 
 on:
   schedule:
@@ -18,8 +19,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  MIRROR_REGISTRY: registry.example.net
-  MIRROR_IMAGE_NAME: lightpoint
+  MIRROR_REGISTRY: ${{ vars.MIRROR_REGISTRY }}
+  MIRROR_IMAGE_NAME: ${{ vars.MIRROR_IMAGE_NAME || 'lightpoint' }}
 
 jobs:
   test:
@@ -129,14 +130,14 @@ jobs:
           TAG_ARGS=$(echo "$TAGS" | xargs -I {} echo -n "-t {} ")
           docker buildx imagetools create $TAG_ARGS \
             $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
-      - name: Mirror to ${{ env.MIRROR_REGISTRY }}
+      - name: Mirror to the secondary registry
         env:
           MIRROR_USER: ${{ secrets.MIRROR_REGISTRY_USERNAME }}
           MIRROR_PASS: ${{ secrets.MIRROR_REGISTRY_PASSWORD }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          if [ -z "$MIRROR_USER" ] || [ -z "$MIRROR_PASS" ]; then
-            echo "MIRROR_REGISTRY_* secrets not set; skipping mirror"
+          if [ -z "$MIRROR_REGISTRY" ] || [ -z "$MIRROR_USER" ] || [ -z "$MIRROR_PASS" ]; then
+            echo "MIRROR_REGISTRY variable or MIRROR_REGISTRY_* secrets not set; skipping mirror"
             exit 0
           fi
           echo "$MIRROR_PASS" | docker login "$MIRROR_REGISTRY" -u "$MIRROR_USER" --password-stdin
